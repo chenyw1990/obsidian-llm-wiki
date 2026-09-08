@@ -974,4 +974,23 @@ export const EN_TEXTS = {
     // queue. Completed and failed jobs are preserved so the user
     // still sees what happened.
     cancelAllQueueJobs: 'Cancel all',
+    // ACP
+    acpPresetName: 'Agent tool preset',
+    acpPresetDesc: 'Select an ACP-compatible agent tool (Claude Code, OpenCode, Codex, Antigravity CLI) or customize.',
+    acpPresetClaudeCode: 'Claude Code (claude acp)',
+    acpPresetOpenCode: 'OpenCode (opencode acp)',
+    acpPresetCodex: 'Codex (codex acp)',
+    acpPresetAntigravity: 'Antigravity CLI (agy acp)',
+    acpPresetCustom: 'Custom agent / command',
+    acpHint: 'ACP CLI agents (Claude Code, OpenCode, Codex, Antigravity CLI) handle authentication via their CLI login and are automatically launched during Q&A.',
+    acpCwdName: 'Agent working directory',
+    acpCwdDesc: 'Working directory for the agent process (leave empty to use vault root).',
+    acpTransportName: 'Transport protocol',
+    acpTransportDesc: 'Communication transport used to connect to the ACP agent (HTTP, WebSocket, or local CLI process).',
+    acpCommandName: 'Agent command',
+    acpCommandDesc: 'Command to spawn the local ACP agent process (e.g. "claude acp", "gemini --experimental-acp").',
+    acpServerStartCommand: 'Start ACP Agent Server',
+    acpServerStopCommand: 'Stop ACP Agent Server',
+    acpServerStartedNotice: 'ACP Server started on 127.0.0.1:{}',
+    acpServerStoppedNotice: 'ACP Server stopped',
 } as const;

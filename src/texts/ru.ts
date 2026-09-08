@@ -936,4 +936,23 @@ export const RU_TEXTS = {
     // импорта. Завершённые и неудачные задания сохраняются, чтобы пользователь
     // всё ещё видел, что произошло.
     cancelAllQueueJobs: 'Отменить все',
+    // ACP
+    acpPresetName: 'Предустановка инструмента агента',
+    acpPresetDesc: 'Выберите ACP-совместимый инструмент агента (Claude Code, OpenCode, Codex, Antigravity CLI) или настройте вручную.',
+    acpPresetClaudeCode: 'Claude Code (claude acp)',
+    acpPresetOpenCode: 'OpenCode (opencode acp)',
+    acpPresetCodex: 'Codex (codex acp)',
+    acpPresetAntigravity: 'Antigravity CLI (agy acp)',
+    acpPresetCustom: 'Пользовательский агент / команда',
+    acpHint: 'CLI-агенты ACP (Claude Code, OpenCode, Codex, Antigravity CLI) выполняют аутентификацию через собственный CLI и запускаются автоматически при вопросах и ответах.',
+    acpCwdName: 'Рабочий каталог агента',
+    acpCwdDesc: 'Рабочий каталог для процесса агента (оставьте пустым для корня хранилища).',
+    acpTransportName: 'Транспортный протокол',
+    acpTransportDesc: 'Протокол связи для подключения к агенту ACP (HTTP, WebSocket или локальный процесс CLI).',
+    acpCommandName: 'Команда запуска агента',
+    acpCommandDesc: 'Команда для запуска локального процесса агента ACP (например, "claude acp", "gemini --experimental-acp").',
+    acpServerStartCommand: 'Запустить сервер ACP',
+    acpServerStopCommand: 'Остановить сервер ACP',
+    acpServerStartedNotice: 'Сервер ACP запущен на 127.0.0.1:{}',
+    acpServerStoppedNotice: 'Сервер ACP остановлен',
 } as const;

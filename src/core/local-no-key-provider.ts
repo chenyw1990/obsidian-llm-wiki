@@ -3,7 +3,7 @@
  * Kept in one place so Test Connection, client init, and ingest gates
  * cannot drift (regression class: #223 / LM Studio ingest still blocked).
  */
-export const LOCAL_NO_KEY_PROVIDERS = ['ollama', 'lmstudio'] as const;
+export const LOCAL_NO_KEY_PROVIDERS = ['ollama', 'lmstudio', 'acp'] as const;
 
 export type LocalNoKeyProvider = (typeof LOCAL_NO_KEY_PROVIDERS)[number];
 

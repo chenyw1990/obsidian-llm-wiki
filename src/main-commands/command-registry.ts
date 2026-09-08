@@ -11,7 +11,7 @@
  * Dedicated module to avoid circular deps with main.ts.
  */
 
-import { Notice } from 'obsidian';
+import { Notice, Platform } from 'obsidian';
 import type { Plugin } from 'obsidian';
 import type { AutoMaintainManager } from '../schema/auto-maintain';
 import type { BatchProgress } from '../core/status-bar';
@@ -41,6 +41,8 @@ export interface CommandRegistryHost extends Plugin {
   lintWiki(trigger?: 'auto' | 'manual'): void;
   clearPdfCache(): Promise<void>;
   migrateApiKeyToSettings(): Promise<void>;
+  startAcpServer?(): Promise<void>;
+  stopAcpServer?(): Promise<void>;
 }
 
 export function registerWikiCommands(plugin: CommandRegistryHost): void {
@@ -140,6 +142,20 @@ export function registerWikiCommands(plugin: CommandRegistryHost): void {
     name: getText(plugin.settings.language, 'apiKeyMigrateToSecretStorageButton'),
     callback: () => { void plugin.migrateApiKeyToSettings(); },
   });
+
+  if (Platform.isDesktop) {
+    plugin.addCommand({
+      id: 'start-acp-server',
+      name: getText(plugin.settings.language, 'acpServerStartCommand'),
+      callback: () => { void plugin.startAcpServer?.(); },
+    });
+
+    plugin.addCommand({
+      id: 'stop-acp-server',
+      name: getText(plugin.settings.language, 'acpServerStopCommand'),
+      callback: () => { void plugin.stopAcpServer?.(); },
+    });
+  }
 
   plugin.addRibbonIcon('sticker', t.cmdIngestActiveFile, () => {
     plugin.ingestActiveFile();
