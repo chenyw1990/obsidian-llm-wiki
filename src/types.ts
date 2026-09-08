@@ -6,6 +6,8 @@ import type { RejectionReason } from './core/source-requirements';
 import type { TaskPolicyMap } from './core/task-policy';
 import type { OutputMode } from './llm-sdk/output-mode-prober';
 import type { TEXTS } from './texts';
+import type { AcpAgentPreset } from './llm-sdk/acp/acp-presets';
+export type { AcpAgentPreset };
 
 /**
  * Issue #244 — Programmatic Mentions writes (v1.23.3 / v1.24.0).
@@ -261,6 +263,14 @@ export interface LLMWikiSettings {
   useCustomModel?: boolean;
   maxConversationHistory: number;
   queryHistory?: QueryHistoryMessage[];
+
+  // ACP (Agent Client Protocol)
+  acpAgentPreset?: AcpAgentPreset;
+  acpTransport?: 'http' | 'websocket' | 'stdio';
+  acpCommand?: string;
+  acpCwd?: string;
+  acpServerEnabled?: boolean;
+  acpServerPort?: number;
 
   // Schema
   enableSchema: boolean;
@@ -1204,6 +1214,18 @@ export const PREDEFINED_PROVIDERS: Record<string, ProviderConfig> = {
     apiKeyPlaceholderZh: 'API Key',
     requiresBaseUrl: true,
     authMode: 'api-key'
+  },
+  acp: {
+    id: 'acp',
+    name: 'Agent Client Protocol (ACP)',
+    nameEn: 'Agent Client Protocol (ACP)',
+    nameZh: 'Agent Client Protocol (ACP)',
+    baseUrl: 'http://localhost:3000',
+    apiKeyPlaceholder: 'Optional Token',
+    apiKeyPlaceholderEn: 'Optional Token',
+    apiKeyPlaceholderZh: '认证令牌（可选）',
+    requiresBaseUrl: false,
+    authMode: 'none',
   }
 };
 
@@ -1231,6 +1253,14 @@ export const DEFAULT_SETTINGS: LLMWikiSettings = {
   useCustomModel: false,
   maxConversationHistory: 30,
   queryHistory: [],
+
+  // ACP defaults
+  acpAgentPreset: 'claude-code',
+  acpTransport: 'stdio',
+  acpCommand: 'claude acp',
+  acpCwd: '',
+  acpServerEnabled: false,
+  acpServerPort: 8765,
 
   // Schema
   enableSchema: true,

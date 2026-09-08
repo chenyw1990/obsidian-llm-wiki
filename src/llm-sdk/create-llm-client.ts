@@ -75,6 +75,12 @@ export interface ProviderSettings {
    * hosts pass it next to codexAuth.
    */
   bedrockAuthManager?: BedrockAuthManager;
+  acpAgentPreset?: import('./acp/acp-presets').AcpAgentPreset;
+  acpTransport?: 'http' | 'websocket' | 'stdio';
+  acpCommand?: string;
+  acpCwd?: string;
+  acpConnection?: import('./acp/acp-connection').AcpConnection;
+  model?: string;
 }
 
 /**
@@ -190,6 +196,11 @@ export async function createLLMClientFromSettings(
     if (!settings.codexAuth) throw new Error('Codex auth manager is required');
     return new OpenAICodexSdkClient({ auth: settings.codexAuth, sessionId: () => crypto.randomUUID(), version: settings.codexVersion ?? 'unknown', quotaMessage: settings.codexQuotaMessage });
   }
+
+  if (provider === 'acp') {
+    const { createAcpSdkClient } = await import('./acp/create-acp-client');
+    return createAcpSdkClient(settings, apiKey);
+  }
   // v1.24.1 PATCH Bedrock Stage 1 — region-scoped bedrock-mantle endpoint,
   // reusing existing SDK clients via custom baseURL.
   if (provider === 'bedrock-anthropic') {
@@ -246,6 +257,7 @@ export interface PreloadedSdkModules {
   AnthropicSdkClient: typeof import('./anthropic-sdk-client').AnthropicSdkClient;
   OpenAICompatSdkClient: typeof import('./openai-compat-sdk-client').OpenAICompatSdkClient;
   OpenAICodexSdkClient: typeof import('./openai-codex-sdk-client').OpenAICodexSdkClient;
+  createAcpSdkClient: typeof import('./acp/create-acp-client').createAcpSdkClient;
 }
 
 let preloadedModules: PreloadedSdkModules | null = null;
@@ -257,17 +269,19 @@ let preloadedModules: PreloadedSdkModules | null = null;
  * sync API contract).
  */
 export async function preloadLLMClientModules(): Promise<void> {
-  const [openai, anthropic, compat, codex] = await Promise.all([
+  const [openai, anthropic, compat, codex, acp] = await Promise.all([
     import('./openai-sdk-client'),
     import('./anthropic-sdk-client'),
     import('./openai-compat-sdk-client'),
     import('./openai-codex-sdk-client'),
+    import('./acp/create-acp-client'),
   ]);
   preloadedModules = {
     OpenAISdkClient: openai.OpenAISdkClient,
     AnthropicSdkClient: anthropic.AnthropicSdkClient,
     OpenAICompatSdkClient: compat.OpenAICompatSdkClient,
     OpenAICodexSdkClient: codex.OpenAICodexSdkClient,
+    createAcpSdkClient: acp.createAcpSdkClient,
   };
 }
 
@@ -287,7 +301,7 @@ export function createLLMClientFromSettingsSync(
       'Call `await preloadLLMClientModules()` during plugin onload() before any LLM call.'
     );
   }
-  const { OpenAISdkClient, AnthropicSdkClient, OpenAICompatSdkClient, OpenAICodexSdkClient } = preloadedModules;
+  const { OpenAISdkClient, AnthropicSdkClient, OpenAICompatSdkClient, OpenAICodexSdkClient, createAcpSdkClient } = preloadedModules;
 
   const provider = settings.provider;
   // v1.25.3 #182: read the key through the resolver so SecretStorage is
@@ -308,6 +322,10 @@ export function createLLMClientFromSettingsSync(
   if (provider === 'openai-codex') {
     if (!settings.codexAuth) throw new Error('Codex auth manager is required');
     return new OpenAICodexSdkClient({ auth: settings.codexAuth, sessionId: () => crypto.randomUUID(), version: settings.codexVersion ?? 'unknown', quotaMessage: settings.codexQuotaMessage });
+  }
+
+  if (provider === 'acp') {
+    return createAcpSdkClient(settings, apiKey);
   }
   // v1.24.1 PATCH Bedrock Stage 1 — region-scoped bedrock-mantle endpoint,
   // reusing existing SDK clients via custom baseURL.

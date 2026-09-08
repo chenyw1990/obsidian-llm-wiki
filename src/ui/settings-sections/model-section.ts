@@ -35,6 +35,7 @@ import type { LLMWikiSettingTab } from '../settings';
 import { PREDEFINED_PROVIDERS } from '../../types';
 import { resolveModelTaskUiMode } from '../settings-per-task-helpers';
 import { fetchModelsWithFallback } from '../../core/url-fallback';
+import { fetchAcpModels } from '../../llm-sdk/acp/acp-presets';
 import { resolveProviderApiKey } from '../../llm-sdk/provider-api-key-resolver';
 import { classifyFetchError } from '../settings-helpers';
 import { NOTICE_NORMAL, NOTICE_ERROR } from '../../constants';
@@ -76,93 +77,85 @@ export function renderModelSection(tab: LLMWikiSettingTab, containerEl: HTMLElem
 
           // OpenRouter uses ':' for catalog variants such as ':free', so keep every valid string ID.
           const getModelFilter = (provider: string) => {
-            if (provider === 'openrouter') return (id: string) => typeof id === 'string';
+            if (provider === 'openrouter' || provider === 'acp') return (id: string) => typeof id === 'string' && id.trim().length > 0;
             else if (provider === 'ollama') return (id: string) => !id.includes('/');
             else return (id: string) => !id.includes(':') && !id.includes('/');
           };
           const modelFilter = getModelFilter(tempSettings.provider);
 
-          // v1.23.0 P1.5: use fetchModelsWithFallback for all providers.
-          // Unified fallback handles missing /v1 suffix (Kimi Anthropic
-          // case) - Test Connection and Fetch Models share the same
-          // module-level cache.
-          const providerForFallback =
-            tempSettings.provider === 'openai' ? 'openai' :
-            tempSettings.provider === 'anthropic' ? 'anthropic' :
-            tempSettings.provider as 'openai-compatible' | 'anthropic-compatible';
-
-          const fetchOneUrl = async (modelsUrl: string): Promise<string[]> => {
-            try {
-              const response = await requestUrl({
-                url: modelsUrl,
-                method: 'GET',
-                headers: tempSettings.provider === 'anthropic' || tempSettings.provider === 'anthropic-compatible'
-                  ? { 'x-api-key': apiKey, 'Anthropic-Version': '2023-06-01' }
-                  : { 'Authorization': `Bearer ${apiKey}` },
-                throw: false,
-              });
-              if (response.status >= 200 && response.status < 300) {
-                const data = response.json as { data?: Array<{ id: string }> };
-                // B1 (v1.26.3 PATCH, DocT CR): a 2xx is NEVER an error.
-                // An absent/empty `data` array is a valid "no models"
-                // answer — return [] so the orchestrator tries the next
-                // candidate and the caller's `empty model list` → Empty
-                // path (fetchErrorEmpty's dedicated message) stays
-                // reachable. Previously this fell through to the throw
-                // below, surfacing "HTTP 200: ..." which classifyFetchError
-                // had no branch for → misreported as Network.
-                return data.data?.map((m: { id: string }) => m.id) ?? [];
-              }
-              // B1 (v1.26.3 PATCH, DocT CR): non-2xx responses throw an
-              // error carrying the HTTP status. Previously this path
-              // silently returned [], which caused the orchestrator to
-              // synthesize 'All URL candidates failed' — a status-less
-              // message that `classifyFetchError` (settings-helpers.ts)
-              // could not match, so every auth/endpoint/server failure
-              // was misreported as `fetchErrorNetwork`. By embedding the
-              // status code in the error message, classifyFetchError's
-              // leading `^HTTP (\d+)` match routes it to the right category.
-              // Body is truncated to 200 chars so the wrapped error does
-              // not blow up the Notice; the full body is not logged.
-              const bodySnippet = (response.text ?? '').slice(0, 200);
-              throw new Error(`HTTP ${response.status}: ${bodySnippet}`);
-            } catch (error) {
-              // Preserve the status-bearing error (re-thrown above); wrap
-              // genuine fetch exceptions (DNS, abort, etc.) so they also
-              // carry an "unknown" marker that classifyFetchError falls
-              // back to Network for.
-              if (error instanceof Error && /^HTTP \d+/.test(error.message)) {
-                throw error;
-              }
-              throw new Error(`Network error: ${error instanceof Error ? error.message : String(error)}`);
-            }
-          };
-
-          const effectiveBaseUrl = baseUrl ?? (
-            tempSettings.provider === 'anthropic' ? 'https://api.anthropic.com/v1' :
-            tempSettings.provider === 'openai' ? 'https://api.openai.com/v1' :
-            ''
-          );
-
           let models: string[];
-          try {
+          if (tempSettings.provider === 'acp') {
+            models = await fetchAcpModels(tempSettings);
+            if (models.length === 0) throw new Error('empty model list');
+          } else {
+            // v1.23.0 P1.5: use fetchModelsWithFallback for all providers.
+            // Unified fallback handles missing /v1 suffix (Kimi Anthropic
+            // case) - Test Connection and Fetch Models share the same
+            // module-level cache.
+            const providerForFallback =
+              tempSettings.provider === 'openai' ? 'openai' :
+              tempSettings.provider === 'anthropic' ? 'anthropic' :
+              tempSettings.provider as 'openai-compatible' | 'anthropic-compatible';
+
+            const fetchOneUrl = async (modelsUrl: string): Promise<string[]> => {
+              try {
+                const response = await requestUrl({
+                  url: modelsUrl,
+                  method: 'GET',
+                  headers: tempSettings.provider === 'anthropic' || tempSettings.provider === 'anthropic-compatible'
+                    ? { 'x-api-key': apiKey, 'Anthropic-Version': '2023-06-01' }
+                    : { 'Authorization': `Bearer ${apiKey}` },
+                  throw: false,
+                });
+                if (response.status >= 200 && response.status < 300) {
+                  const data = response.json as { data?: Array<{ id: string }> };
+                  // B1 (v1.26.3 PATCH, DocT CR): a 2xx is NEVER an error.
+                  // An absent/empty `data` array is a valid "no models"
+                  // answer — return [] so the orchestrator tries the next
+                  // candidate and the caller's `empty model list` → Empty
+                  // path (fetchErrorEmpty's dedicated message) stays
+                  // reachable. Previously this fell through to the throw
+                  // below, surfacing "HTTP 200: ..." which classifyFetchError
+                  // had no branch for → misreported as Network.
+                  return data.data?.map((m: { id: string }) => m.id) ?? [];
+                }
+                // B1 (v1.26.3 PATCH, DocT CR): non-2xx responses throw an
+                // error carrying the HTTP status. Previously this path
+                // silently returned [], which caused the orchestrator to
+                // synthesize 'All URL candidates failed' — a status-less
+                // message that `classifyFetchError` (settings-helpers.ts)
+                // could not match, so every auth/endpoint/server failure
+                // was misreported as `fetchErrorNetwork`. By embedding the
+                // status code in the error message, classifyFetchError's
+                // leading `^HTTP (\d+)` match routes it to the right category.
+                // Body is truncated to 200 chars so the wrapped error does
+                // not blow up the Notice; the full body is not logged.
+                const bodySnippet = (response.text ?? '').slice(0, 200);
+                throw new Error(`HTTP ${response.status}: ${bodySnippet}`);
+              } catch (error) {
+                // Preserve the status-bearing error (re-thrown above); wrap
+                // genuine fetch exceptions (DNS, abort, etc.) so they also
+                // carry an "unknown" marker that classifyFetchError falls
+                // back to Network for.
+                if (error instanceof Error && /^HTTP \d+/.test(error.message)) {
+                  throw error;
+                }
+                throw new Error(`Network error: ${error instanceof Error ? error.message : String(error)}`);
+              }
+            };
+
+            const effectiveBaseUrl = baseUrl ?? (
+              tempSettings.provider === 'anthropic' ? 'https://api.anthropic.com/v1' :
+              tempSettings.provider === 'openai' ? 'https://api.openai.com/v1' :
+              ''
+            );
+
             models = await fetchModelsWithFallback({
               baseUrl: effectiveBaseUrl,
               provider: providerForFallback,
               fetchFn: fetchOneUrl,
             });
             if (models.length === 0) throw new Error('empty model list');
-          } catch (err) {
-            // B1 (v1.26.3 PATCH): preserve the underlying error message so
-            // classifyFetchError can match the HTTP status (or the wrapped
-            // "Network error: ..."). Previously every error path was
-            // rewritten to the status-less 'All URL candidates failed',
-            // which the classifier could not categorize (always fell
-            // through to the default 'Network' branch).
-            if (err instanceof Error) {
-              throw err;
-            }
-            throw new Error('All URL candidates failed');
           }
 
           tempSettings.availableModels = models.filter(modelFilter).sort();

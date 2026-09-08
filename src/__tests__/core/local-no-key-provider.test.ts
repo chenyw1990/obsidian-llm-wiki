@@ -6,13 +6,14 @@ import {
 } from '../../core/local-no-key-provider';
 
 describe('local-no-key-provider', () => {
-  it('lists ollama and lmstudio as the only no-key local providers', () => {
-    expect([...LOCAL_NO_KEY_PROVIDERS]).toEqual(['ollama', 'lmstudio']);
+  it('lists ollama, lmstudio, and acp as no-key local providers', () => {
+    expect([...LOCAL_NO_KEY_PROVIDERS]).toEqual(['ollama', 'lmstudio', 'acp']);
   });
 
-  it('isLocalNoKeyProvider identifies ollama and lmstudio', () => {
+  it('isLocalNoKeyProvider identifies ollama, lmstudio, and acp', () => {
     expect(isLocalNoKeyProvider('ollama')).toBe(true);
     expect(isLocalNoKeyProvider('lmstudio')).toBe(true);
+    expect(isLocalNoKeyProvider('acp')).toBe(true);
     expect(isLocalNoKeyProvider('openai')).toBe(false);
     expect(isLocalNoKeyProvider('custom')).toBe(false);
   });

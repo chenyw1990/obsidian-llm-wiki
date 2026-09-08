@@ -53,6 +53,11 @@ export function createLLMClient(
     codexAuth,
     codexVersion,
     codexQuotaMessage: getText(settings.language, 'codexAuthQuota'),
+    acpAgentPreset: settings.acpAgentPreset,
+    acpTransport: settings.acpTransport,
+    acpCommand: settings.acpCommand,
+    acpCwd: settings.acpCwd,
+    model: settings.model,
   }, pendingApiKey);
 
   return wrapWithAdvancedSettings(client, {

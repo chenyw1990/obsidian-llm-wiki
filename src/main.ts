@@ -1,4 +1,4 @@
-import { Plugin, Notice } from 'obsidian';
+import { Plugin, Notice, Platform } from 'obsidian';
 
 import {
   LLMWikiSettings,
@@ -179,12 +179,63 @@ export class LLMWikiPlugin extends Plugin {
   }
 
   onunload() {
+    if (this.acpServer) {
+      void this.acpServer.stop();
+      this.acpServer = null;
+    }
     this.codexAuthManager?.dispose();
     // #425: drop in-memory temp credentials ONLY — the persisted SSO
     // token survives so the user stays signed in across restarts.
     this.bedrockAuthManager?.dispose();
     this.autoMaintainManager?.stop();
     console.debug('LLM Wiki Plugin unloaded');
+  }
+
+  acpServer: import('./acp-server/acp-server').AcpServer | null = null;
+
+  async startAcpServer(): Promise<void> {
+    if (!Platform.isDesktop) return;
+    try {
+      if (!this.acpServer) {
+        const { AcpServer } = await import('./acp-server/acp-server');
+        this.acpServer = new AcpServer({
+          port: this.settings.acpServerPort ?? 8765,
+          vaultPath: (this.app.vault.adapter as { getBasePath?(): string }).getBasePath?.(),
+          queryEngine: {
+            queryStream: async (question, onChunk) => {
+              if (this.llmClient?.createMessageStream) {
+                return this.llmClient.createMessageStream({
+                  model: this.settings.model,
+                  max_tokens: 4096,
+                  messages: [{ role: 'user', content: question }],
+                  onChunk,
+                });
+              } else if (this.llmClient) {
+                const answer = await this.llmClient.createMessage({
+                  model: this.settings.model,
+                  max_tokens: 4096,
+                  messages: [{ role: 'user', content: question }],
+                });
+                onChunk(answer);
+                return answer;
+              }
+              return 'LLM client not configured';
+            },
+          },
+        });
+      }
+      const port = await this.acpServer.start(this.settings.acpServerPort ?? 8765);
+      new Notice(getText(this.settings.language, 'acpServerStartedNotice').replace('{}', String(port)));
+    } catch (error) {
+      new Notice(`Failed to start ACP server: ${error}`);
+    }
+  }
+
+  async stopAcpServer(): Promise<void> {
+    if (!this.acpServer) return;
+    await this.acpServer.stop();
+    this.acpServer = null;
+    new Notice(getText(this.settings.language, 'acpServerStoppedNotice'));
   }
 
   /**

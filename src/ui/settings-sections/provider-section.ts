@@ -39,6 +39,8 @@ import { renderRangeSlider } from '../settings-helpers';
 import { getCodexAuthUiState } from '../openai-codex-auth-controls';
 import { getBedrockAuthUiState } from '../bedrock-auth-controls';
 import { resolveInitialApiKey } from '../../llm-sdk/provider-api-key-resolver';
+import type { AcpAgentPreset } from '../../types';
+import { getAcpPresetDefaultCommand, getAcpPresetModels } from '../../llm-sdk/acp/acp-presets';
 
 export function renderProviderSection(tab: LLMWikiSettingTab, containerEl: HTMLElement): void {
   const { tempSettings } = tab;
@@ -46,6 +48,7 @@ export function renderProviderSection(tab: LLMWikiSettingTab, containerEl: HTMLE
   const isOllama = tempSettings.provider === 'ollama';
   const isLmStudio = tempSettings.provider === 'lmstudio';
   const isCodex = tempSettings.provider === 'openai-codex';
+  const isAcp = tempSettings.provider === 'acp';
   const isBedrock = tempSettings.provider === 'bedrock-anthropic'
     || tempSettings.provider === 'bedrock-openai';
   // #425: in sso/iam modes the bearer API-key field is inert (AWS
@@ -77,6 +80,17 @@ export function renderProviderSection(tab: LLMWikiSettingTab, containerEl: HTMLE
         tempSettings.availableModels = [];
         tempSettings.useCustomModel = false;
         tempSettings.model = '';
+        if (value === 'acp') {
+          if (!Platform.isMobile) {
+            tempSettings.acpTransport = 'stdio';
+            if (!tempSettings.acpAgentPreset) {
+              tempSettings.acpAgentPreset = 'claude-code';
+            }
+            tempSettings.acpCommand = tempSettings.acpCommand || getAcpPresetDefaultCommand(tempSettings.acpAgentPreset);
+          }
+          tempSettings.availableModels = getAcpPresetModels(tempSettings.acpAgentPreset ?? 'claude-code');
+          tempSettings.model = tempSettings.availableModels[0] ?? 'default';
+        }
         const config = PREDEFINED_PROVIDERS[value];
         if (config && value !== 'custom') tempSettings.baseUrl = config.baseUrl;
         // v1.25.0 PR3: if the user just switched to a native-PDF provider
@@ -104,6 +118,11 @@ export function renderProviderSection(tab: LLMWikiSettingTab, containerEl: HTMLE
       new Setting(containerEl).setName(tab.getText('codexAuthDeviceInstructions').replace('{}', prompt.userCode)).setDesc(prompt.verificationUrl).addButton(button => button.setButtonText(tab.getText('codexAuthCopyCode')).onClick(() => { void tab.copyOpenAICodexDeviceCode(); })).addButton(button => button.setButtonText(tab.getText('cancelButton')).setWarning().onClick(() => { prompt.cancel(); }));
     }
     if (isSignedIn) tab.queueStaleCodexModelRefresh();
+  } else if (isAcp && tempSettings.acpTransport === 'stdio') {
+    containerEl.createEl('p', {
+      text: tab.getText('acpHint'),
+      cls: 'llm-wiki-ollama-hint',
+    });
   } else if (!isOllama && !isLmStudio && !bedrockAwsCredMode) {
     // v1.25.3 #182: read the key through the tested ProviderSecretStore
     // helper (matches Codex's codexAuthManager UX). The text component
@@ -156,15 +175,89 @@ export function renderProviderSection(tab: LLMWikiSettingTab, containerEl: HTMLE
   }
 
   // Base URL
-  if (tempSettings.provider === 'custom' || tempSettings.provider === 'anthropic-compatible' || (providerConfig && tempSettings.baseUrl !== providerConfig.baseUrl)) {
+  if (tempSettings.provider === 'custom' || tempSettings.provider === 'anthropic-compatible' || (tempSettings.provider === 'acp' && tempSettings.acpTransport !== 'stdio') || (providerConfig && tempSettings.baseUrl !== providerConfig.baseUrl)) {
     new Setting(containerEl)
       .setName(tab.getText('baseUrlName'))
-      .setDesc(tempSettings.provider === 'custom' || tempSettings.provider === 'anthropic-compatible'
+      .setDesc(tempSettings.provider === 'custom' || tempSettings.provider === 'anthropic-compatible' || tempSettings.provider === 'acp'
         ? tab.getText('baseUrlDescCustom') : tab.getText('baseUrlDescOverride'))
       .addText(text => text
         .setPlaceholder(providerConfig?.baseUrl || 'https://api.example.com/v1')
         .setValue(tempSettings.baseUrl)
         .onChange((value) => { tempSettings.baseUrl = value; tempSettings.llmReady = false; }));
+  }
+
+  if (tempSettings.provider === 'acp') {
+    new Setting(containerEl)
+      .setName(tab.getText('acpPresetName'))
+      .setDesc(tab.getText('acpPresetDesc'))
+      .addDropdown((dropdown) => {
+        dropdown.addOption('claude-code', tab.getText('acpPresetClaudeCode'));
+        dropdown.addOption('opencode', tab.getText('acpPresetOpenCode'));
+        dropdown.addOption('codex', tab.getText('acpPresetCodex'));
+        dropdown.addOption('antigravity', tab.getText('acpPresetAntigravity'));
+        dropdown.addOption('custom', tab.getText('acpPresetCustom'));
+        dropdown.setValue(tempSettings.acpAgentPreset ?? 'claude-code');
+        dropdown.onChange((val) => {
+          const preset = val as AcpAgentPreset;
+          tempSettings.acpAgentPreset = preset;
+          if (preset !== 'custom') {
+            tempSettings.acpTransport = 'stdio';
+            tempSettings.acpCommand = getAcpPresetDefaultCommand(preset);
+          }
+          tempSettings.availableModels = getAcpPresetModels(preset);
+          if (!tempSettings.model || !tempSettings.availableModels.includes(tempSettings.model)) {
+            tempSettings.model = tempSettings.availableModels[0] ?? 'default';
+          }
+          tab.display();
+        });
+      });
+
+    if (tempSettings.acpAgentPreset === 'custom') {
+      new Setting(containerEl)
+        .setName(tab.getText('acpTransportName'))
+        .setDesc(tab.getText('acpTransportDesc'))
+        .addDropdown((dropdown) => {
+          dropdown.addOption('http', 'HTTP (JSON-rpc)');
+          dropdown.addOption('websocket', 'Websocket (ws://)');
+          if (!Platform.isMobile) {
+            dropdown.addOption('stdio', 'Local process (stdio)');
+          }
+          dropdown.setValue(tempSettings.acpTransport ?? 'http');
+          dropdown.onChange((value) => {
+            tempSettings.acpTransport = value as 'http' | 'websocket' | 'stdio';
+            tab.display();
+          });
+        });
+    }
+
+    if (tempSettings.acpTransport === 'stdio' && !Platform.isMobile) {
+      const defaultCmd = tempSettings.acpAgentPreset
+        ? getAcpPresetDefaultCommand(tempSettings.acpAgentPreset)
+        : 'claude acp';
+      new Setting(containerEl)
+        .setName(tab.getText('acpCommandName'))
+        .setDesc(tab.getText('acpCommandDesc'))
+        .addText((text) =>
+          text
+            .setPlaceholder(defaultCmd || 'claude acp')
+            .setValue(tempSettings.acpCommand ?? defaultCmd)
+            .onChange((value) => {
+              tempSettings.acpCommand = value;
+            }),
+        );
+
+      new Setting(containerEl)
+        .setName(tab.getText('acpCwdName'))
+        .setDesc(tab.getText('acpCwdDesc'))
+        .addText((text) =>
+          text
+            .setPlaceholder((tab.plugin.app.vault.adapter as { getBasePath?(): string }).getBasePath?.() || '')
+            .setValue(tempSettings.acpCwd ?? '')
+            .onChange((value) => {
+              tempSettings.acpCwd = value;
+            }),
+        );
+    }
   }
 
   // v1.24.1 PATCH Bedrock Stage 1 - region selector (only when provider
